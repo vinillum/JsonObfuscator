@@ -1,0 +1,2 @@
+# JsonObfuscator
+Simple JSON Obfuscator
