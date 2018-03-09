@@ -9,6 +9,17 @@
 #include <cstring>
 #include "Parser.h"
 
+constexpr int expectedNoOfArgs{7};
+
+/**
+ * Show help message
+ */
+void showHelp() {
+	std::cerr << "Missing input, output and/or mapping files" << std::endl
+			  << "Usage: tool -i <inputFile> -o <outputFile> -m <mapping file>" << std::endl;
+	exit(1);
+}
+
 /**
  * Entry point
  */
@@ -16,6 +27,10 @@ int main(int argc, char* argv[]) {
 	std::string inputFile;
 	std::string outputFile;
 	std::string mappingFile;
+
+	if (argc != expectedNoOfArgs) {
+		showHelp();
+	}
 
 	// Parse command line input
 	for (int i = 1; i < argc; ++i) {
@@ -28,14 +43,14 @@ int main(int argc, char* argv[]) {
 		} else if (strcmp(argv[i], "-m") == 0) {
 			++i;
 			mappingFile = argv[i];
+		} else {
+			showHelp();
 		}
 	}
 
 	// Both input and output are required
 	if (inputFile.empty() || outputFile.empty() || mappingFile.empty()) {
-		std::cerr << "Missing input, output and/or mapping files" << std::endl
-				  << "Usage: tool -i <inputFile> -o <outputFile> -m <mapping file>";
-		return 1;
+		showHelp();
 	}
 
 	Parser parser(inputFile, outputFile, mappingFile);
