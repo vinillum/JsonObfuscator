@@ -13,9 +13,9 @@
  * Entry point
  */
 int main(int argc, char* argv[]) {
-	std::string inputFile{};
-	std::string outputFile{};
-	std::string mappingFile{};
+	std::string inputFile;
+	std::string outputFile;
+	std::string mappingFile;
 
 	// Parse command line input
 	for (int i = 1; i < argc; ++i) {

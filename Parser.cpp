@@ -59,10 +59,10 @@ void Parser::Parse() {
 	bool inString{false};
 
 	// Building string identifier
-	std::stringstream identifier{};
+	std::stringstream identifier;
 
-	// Currenly processed character
-	char character{0};
+	// Currently processed character
+	char character;
 
 	// Has the previous character signalled an escape character is incoming
 	bool escapeSeq{false};
@@ -159,7 +159,7 @@ std::string Parser::ParseEscapeSequence(const char character) {
 		std::string retVal{"\\u"};
 		// For special hex representations, put the next x characters
 		// as they come into the return value
-		char uniCharacter{0};
+		char uniCharacter;
 		while (nextChars > 0 && inputFile_.get(uniCharacter)) {
 			retVal += uniCharacter;
 			--nextChars;
@@ -176,7 +176,7 @@ std::string Parser::ParseEscapeSequence(const char character) {
  */
 std::string Parser::ConvertToHexString(const std::string& identifier) {
 	// Return value
-	std::stringstream hexVal{};
+	std::stringstream hexVal;
 
 	// Enable hex mode - will only affect integer output
 	hexVal << std::hex;
@@ -237,7 +237,7 @@ void Parser::OutputMappings() {
 	mappingFile_ << "{" << std::endl;
 	for (const auto& entry : identifierMap_ ) {
 		if (!firstEntry) {
-			mappingFile_ << ",\"" << std::endl;
+			mappingFile_ << "," << std::endl;
 		} else {
 			firstEntry = false;
 		}
