@@ -24,7 +24,9 @@ public:
 	/**
 	 * Constructor
 	 */
-	Parser(std::string inputFile, std::string outputFile, std::string mappingFile);
+	Parser(const std::string& inputFile,
+			const std::string& outputFile,
+			const std::string& mappingFile);
 
 	/**
 	 * Destructor

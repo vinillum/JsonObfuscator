@@ -12,7 +12,9 @@
 /**
  * Constructor
  */
-Parser::Parser(std::string inputFile, std::string outputFile, std::string mappingFile) :
+Parser::Parser(const std::string& inputFile,
+				const std::string& outputFile,
+				const std::string& mappingFile) :
 	inputFile_{},
 	outputFile_{},
 	mappingFile_{},
