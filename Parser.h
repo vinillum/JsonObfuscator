@@ -31,7 +31,7 @@ public:
 	/**
 	 * Destructor
 	 */
-	~Parser();
+	~Parser() { }
 
 	/**
 	 * Parse the input file, writing to output file immediately
@@ -41,7 +41,7 @@ public:
 	/**
 	 * Return parser status
 	 */
-	inline bool IsOk();
+	bool IsOk() { return isOk_; }
 
 	/**
 	 * Outputs mappings into a file
@@ -89,12 +89,5 @@ private:
 	 */
 	std::map<std::string, std::string> identifierMap_;
 };
-
-/**
- * IsOk
- */
-bool Parser::IsOk() {
-	return isOk_;
-}
 
 #endif /* PARSER_H_ */

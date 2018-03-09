@@ -37,23 +37,6 @@ Parser::Parser(const std::string& inputFile,
 }
 
 /**
- * Destructor
- */
-Parser::~Parser() {
-	if (inputFile_.is_open()) {
-		inputFile_.close();
-	}
-
-	if (outputFile_.is_open()) {
-		outputFile_.close();
-	}
-
-	if (mappingFile_.is_open()) {
-		mappingFile_.close();
-	}
-}
-
-/**
  * Parse
  */
 void Parser::Parse() {
