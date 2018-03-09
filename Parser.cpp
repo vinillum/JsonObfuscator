@@ -234,14 +234,14 @@ void Parser::OutputMappings() {
 	// Flag to tell if a comma is required before the entry
 	bool firstEntry{true};
 
-	mappingFile_ << "{\n";
+	mappingFile_ << "{" << std::endl;
 	for (const auto& entry : identifierMap_ ) {
 		if (!firstEntry) {
-			mappingFile_ << ",\n";
+			mappingFile_ << ",\"" << std::endl;
 		} else {
 			firstEntry = false;
 		}
 		mappingFile_ << "\t\"" << entry.first << "\": \"" << entry.second << '"';
 	}
-	mappingFile_ << "\n}";
+	mappingFile_ << std::endl << "}";
 }

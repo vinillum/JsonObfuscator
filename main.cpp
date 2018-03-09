@@ -33,7 +33,7 @@ int main(int argc, char* argv[]) {
 
 	// Both input and output are required
 	if (inputFile.empty() || outputFile.empty() || mappingFile.empty()) {
-		std::cerr << "Missing input, output and/or mapping files\n"
+		std::cerr << "Missing input, output and/or mapping files" << std::endl
 				  << "Usage: tool -i <inputFile> -o <outputFile> -m <mapping file>";
 		return 1;
 	}
@@ -43,17 +43,17 @@ int main(int argc, char* argv[]) {
 	if (parser.IsOk()) {
 		parser.Parse();
 	} else {
-		std::cerr << "Failed to initialise parser";
+		std::cerr << "Failed to initialise parser" << std::endl;
 	}
 
 	if (parser.IsOk()) {
 		parser.OutputMappings();
 	} else {
-		std::cerr << "Failed to parse the JSON file";
+		std::cerr << "Failed to parse the JSON file" << std::endl;
 	}
 
 	if (parser.IsOk()) {
-		std::cout << "Successfully parsed the JSON file";
+		std::cout << "Successfully parsed the JSON file" << std::endl;
 	}
 
 	return (parser.IsOk() ? 0 : 1);
