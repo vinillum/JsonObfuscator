@@ -125,87 +125,50 @@ void Parser::Parse() {
  * ParseEscapeSequence
  */
 std::string Parser::ParseEscapeSequence(const char character) {
-	// Identifies how many characters are expected in special hex representations
-	int nextChars{0};
-
-	// Return value
-	std::string retVal{};
 
 	// No apparent connection between an escape sequence and it's
 	// hex representation could be found, so just hard code it
 	switch (character) {
-	case 'a':
-		retVal = "\\u0007";
-		break;
-
 	case 'b':
-		retVal = "\\u0008";
-		break;
+		return "\\u0008";
 
 	case 'f':
-		retVal = "\\u000c";
-		break;
+		return "\\u000c";
 
 	case 'n':
-		retVal = "\\u000a";
-		break;
+		return "\\u000a";
 
 	case 'r':
-		retVal = "\\u000d";
-		break;
+		return "\\u000d";
 
 	case 't':
-		retVal = "\\u0009";
-		break;
-
-	case 'v':
-		retVal = "\\u000b";
-		break;
+		return "\\u0009";
 
 	case '"':
-		retVal = "\\u0022";
-		break;
+		return "\\u0022";
 
-	case '\'':
-		retVal = "\\u0027";
-		break;
+	case '/':
+		return "\\u002f";
 
 	case '\\':
-		retVal = "\\u005c";
-		break;
-
-
-	// 2 character hex representation
-	case 'x':
-		nextChars = 2;
-		retVal = "\\u00";
-		break;
+		return "\\u005c";
 
 	// 4 character hex representation
 	case 'u':
-		nextChars = 4;
-		retVal = "\\u";
-		break;
-
-	// 8 character hex representation
-	case 'U':
-		nextChars = 8;
-		retVal = "\\U";
-		break;
-
-	default:
-		isOk_ = false;
+		int nextChars{4};
+		std::string retVal{"\\u"};
+		// For special hex representations, put the next x characters
+		// as they come into the return value
+		char uniCharacter{0};
+		while (nextChars > 0 && inputFile_.get(uniCharacter)) {
+			retVal += uniCharacter;
+			--nextChars;
+		}
+		return retVal;
 	}
 
-	// For special hex representations, put the next x characters
-	// as they come into the return value
-	char uniCharacter{0};
-	while (nextChars > 0 && inputFile_.get(uniCharacter)) {
-		retVal += uniCharacter;
-		--nextChars;
-	}
-
-	return retVal;
+	isOk_ = false;
+	return "";
 }
 
 /**
@@ -234,13 +197,7 @@ std::string Parser::ConvertToHexString(const std::string& identifier) {
 		// Determine how many characters come in an escape sequence
 		} else if (escapeSeq) {
 			escapeSeq = false;
-			if (character == 'u') {
-				ignoreChars = 4;
-			} else if (character == 'U') {
-				ignoreChars = 8;
-			} else {
-				isOk_ = false;
-			}
+			ignoreChars = 4;
 			hexVal << character;
 
 		// Ignore conversion logic while inside espace sequence
