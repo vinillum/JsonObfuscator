@@ -42,6 +42,9 @@ public:
 	 */
 	void OutputMappings();
 
+	Parser(Parser&&) = default;
+	Parser& operator=(Parser&&) = default;
+
 private:
 
 	Parser(const Parser&) = delete;
