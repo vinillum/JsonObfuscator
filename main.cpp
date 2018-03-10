@@ -5,11 +5,12 @@
  *      Author: Juozas Varonenka
  */
 
-#include <iostream>
-#include <cstring>
 #include "Parser.h"
 
-constexpr int expectedNoOfArgs{7};
+#include <iostream>
+#include <cstring>
+
+constexpr int kExpectedNoOfArgs{7};
 
 /**
  * Show help message
@@ -20,15 +21,12 @@ void showHelp() {
 	exit(1);
 }
 
-/**
- * Entry point
- */
 int main(int argc, char* argv[]) {
-	std::string inputFile;
-	std::string outputFile;
-	std::string mappingFile;
+	std::string input_file;
+	std::string output_file;
+	std::string mapping_file;
 
-	if (argc != expectedNoOfArgs) {
+	if (argc != kExpectedNoOfArgs) {
 		showHelp();
 	}
 
@@ -36,24 +34,23 @@ int main(int argc, char* argv[]) {
 	for (int i = 1; i < argc; ++i) {
 		if (strcmp(argv[i], "-i") == 0) {
 			++i;
-			inputFile = argv[i];
+			input_file = argv[i];
 		} else if (strcmp(argv[i], "-o") == 0) {
 			++i;
-			outputFile = argv[i];
+			output_file = argv[i];
 		} else if (strcmp(argv[i], "-m") == 0) {
 			++i;
-			mappingFile = argv[i];
+			mapping_file = argv[i];
 		} else {
 			showHelp();
 		}
 	}
 
-	// Both input and output are required
-	if (inputFile.empty() || outputFile.empty() || mappingFile.empty()) {
+	if (input_file.empty() || output_file.empty() || mapping_file.empty()) {
 		showHelp();
 	}
 
-	Parser parser(inputFile, outputFile, mappingFile);
+	Parser parser(input_file, output_file, mapping_file);
 
 	if (parser.IsOk()) {
 		parser.Parse();

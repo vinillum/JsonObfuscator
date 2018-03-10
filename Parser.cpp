@@ -8,105 +8,79 @@
 #include "Parser.h"
 
 #include <sstream>
-#include <iostream>
 
-/**
- * Constructor
- */
-Parser::Parser(const std::string& inputFile,
-				const std::string& outputFile,
-				const std::string& mappingFile) :
-	inputFile_{inputFile},
-	outputFile_{outputFile},
-	mappingFile_{mappingFile},
-	isOk_{true} {
+Parser::Parser(const std::string& input_file,
+				const std::string& output_file,
+				const std::string& mapping_file) :
+	input_file_{input_file},
+	output_file_{output_file},
+	mapping_file_{mapping_file},
+	is_ok_{true} {
 
-	if (!inputFile_.is_open()) {
-		isOk_ = false;
+	if (!input_file_.is_open()) {
+		is_ok_ = false;
 	}
 
-	if (!outputFile_.is_open()) {
-		isOk_ = false;
+	if (!output_file_.is_open()) {
+		is_ok_ = false;
 	}
 
-	if (!mappingFile_.is_open()) {
-		isOk_ = false;
+	if (!mapping_file_.is_open()) {
+		is_ok_ = false;
 	}
 }
 
-/**
- * Parse
- */
 void Parser::Parse() {
-	// Flag to indicate whether we are in a string
-	bool inString{false};
-
-	// Building string identifier
+	bool in_string{false};
 	std::stringstream identifier;
+	bool escape_seq{false};
 
-	// Currently processed character
 	char character;
+	while (input_file_.get(character)) {
 
-	// Has the previous character signalled an escape character is incoming
-	bool escapeSeq{false};
-
-	while (inputFile_.get(character)) {
-
-		// If an escape character is incoming, process it with a special logic
-		if (escapeSeq) {
-			escapeSeq = false;
+		if (escape_seq) {
+			escape_seq = false;
 			identifier << ParseEscapeSequence(character);
 
-		// Quotes identify a string
 		} else if (character == '"') {
 
-			// This is a new string
-			if (!inString) {
-				inString = true;
+			if (!in_string) {
+				in_string = true;
 				identifier.str(std::string{});
 
-			// We just finished processing a string
 			} else {
-				inString = false;
-				outputFile_ << '"';
+				in_string = false;
+				output_file_ << '"';
 
-				// Either find an existing hex value for this identifier,
-				// or create a new one
 				auto it = identifierMap_.find(identifier.str());
 				if (it != identifierMap_.end()) {
-					outputFile_ << it->second;
+					output_file_ << it->second;
 				} else {
-					auto hexVal = ConvertToHexString(identifier.str());
-					identifierMap_[identifier.str()] = hexVal;
-					outputFile_ << hexVal;
+					auto hex_val = ConvertToHexString(identifier.str());
+					identifierMap_[identifier.str()] = hex_val;
+					output_file_ << hex_val;
 				}
 
-				outputFile_ << '"';
+				output_file_ << '"';
 			}
 
-		// We are inside a string, thus put everything inside building identifier,
-		// unless it's an escape character signal
-		} else if (inString) {
+		} else if (in_string) {
 			if (character == '\\') {
-				escapeSeq = true;
+				escape_seq = true;
 			} else {
 				identifier << character;
 			}
 
-		// Everything outside strings is left as is
 		} else {
-			outputFile_.put(character);
+			output_file_.put(character);
 		}
 	}
 
-	if (!inputFile_.eof()) {
-		isOk_ = false;
+	if (!input_file_.eof()) {
+		is_ok_ = false;
 	}
 }
 
-/**
- * ParseEscapeSequence
- */
 std::string Parser::ParseEscapeSequence(const char character) {
 
 	// No apparent connection between an escape sequence and it's
@@ -138,93 +112,74 @@ std::string Parser::ParseEscapeSequence(const char character) {
 
 	// 4 character hex representation
 	case 'u':
-		int nextChars{4};
-		std::string retVal{"\\u"};
-		// For special hex representations, put the next x characters
-		// as they come into the return value
-		char uniCharacter;
-		while (nextChars > 0 && inputFile_.get(uniCharacter)) {
-			retVal += uniCharacter;
-			--nextChars;
+		int skip_chars{4};
+		std::string ret_val{"\\u"};
+		char unicode_character;
+		while (skip_chars > 0 && input_file_.get(unicode_character)) {
+			ret_val += unicode_character;
+			--skip_chars;
 		}
-		return retVal;
+		return ret_val;
 	}
 
-	isOk_ = false;
+	is_ok_ = false;
 	return "";
 }
 
-/**
- * ConvertToHexString
- */
 std::string Parser::ConvertToHexString(const std::string& identifier) {
-	// Return value
-	std::stringstream hexVal;
+	std::stringstream ret_val;
+	ret_val << std::hex;
 
-	// Enable hex mode - will only affect integer output
-	hexVal << std::hex;
-
-	// How many characters need to ignore the special conversion logic
-	int ignoreChars{0};
-
-	// Is escape sequence expected next?
-	bool escapeSeq{false};
+	int skip_chars{0};
+	bool escape_seq{false};
 
 	for (const unsigned char character: identifier) {
 
-		// Escape sequence is expected next
 		if (character == '\\') {
-			escapeSeq = true;
-			hexVal << character;
+			escape_seq = true;
+			ret_val << character;
 
-		// Determine how many characters come in an escape sequence
-		} else if (escapeSeq) {
-			escapeSeq = false;
-			ignoreChars = 4;
-			hexVal << character;
+		} else if (escape_seq) {
+			escape_seq = false;
+			skip_chars = 4;
+			ret_val << character;
 
-		// Ignore conversion logic while inside espace sequence
-		} else if (ignoreChars > 0) {
-			--ignoreChars;
-			hexVal << character;
+		} else if (skip_chars > 0) {
+			--skip_chars;
+			ret_val << character;
 
-		// Special conversion logic
 		} else {
-			hexVal << "\\u";
-			int convertedChar = static_cast<int>(character);
+			ret_val << "\\u";
+			int converted_char = static_cast<int>(character);
 
 			// Prepend zeroes if a hex representation is shorter than 4 characters
-			if (convertedChar < 0x1000) {
-				hexVal << 0;
+			if (converted_char < 0x1000) {
+				ret_val << 0;
 			}
-			if (convertedChar < 0x100) {
-				hexVal << 0;
+			if (converted_char < 0x100) {
+				ret_val << 0;
 			}
-			if (convertedChar < 0x10) {
-				hexVal << 0;
+			if (converted_char < 0x10) {
+				ret_val << 0;
 			}
 
-			hexVal << convertedChar;
+			ret_val << converted_char;
 		}
 	}
-	return hexVal.str();
+	return ret_val.str();
 }
 
-/**
- * OutputMappings
- */
 void Parser::OutputMappings() {
-	// Flag to tell if a comma is required before the entry
-	bool firstEntry{true};
+	bool first_entry{true};
 
-	mappingFile_ << "{" << std::endl;
+	mapping_file_ << "{" << std::endl;
 	for (const auto& entry : identifierMap_ ) {
-		if (!firstEntry) {
-			mappingFile_ << "," << std::endl;
+		if (!first_entry) {
+			mapping_file_ << "," << std::endl;
 		} else {
-			firstEntry = false;
+			first_entry = false;
 		}
-		mappingFile_ << "\t\"" << entry.first << "\": \"" << entry.second << '"';
+		mapping_file_ << "\t\"" << entry.first << "\": \"" << entry.second << '"';
 	}
-	mappingFile_ << std::endl << "}";
+	mapping_file_ << std::endl << "}";
 }

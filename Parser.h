@@ -21,16 +21,10 @@
 class Parser {
 public:
 
-	/**
-	 * Constructor
-	 */
-	Parser(const std::string& inputFile,
-			const std::string& outputFile,
-			const std::string& mappingFile);
+	Parser(const std::string& input_file,
+			const std::string& output_file,
+			const std::string& mapping_file);
 
-	/**
-	 * Destructor
-	 */
 	~Parser() { }
 
 	/**
@@ -41,7 +35,7 @@ public:
 	/**
 	 * Return parser status
 	 */
-	bool IsOk() { return isOk_; }
+	bool IsOk() { return is_ok_; }
 
 	/**
 	 * Outputs mappings into a file
@@ -50,7 +44,6 @@ public:
 
 private:
 
-	// Don't allow copying and assignment
 	Parser(const Parser&) = delete;
 	Parser& operator=(const Parser&) = delete;
 
@@ -67,22 +60,22 @@ private:
 	/**
 	 * Input stream
 	 */
-	std::ifstream inputFile_;
+	std::ifstream input_file_;
 
 	/**
 	 * Output stream
 	 */
-	std::ofstream outputFile_;
+	std::ofstream output_file_;
 
 	/**
 	 * Mapping stream
 	 */
-	std::ofstream mappingFile_;
+	std::ofstream mapping_file_;
 
 	/**
 	 * Parser status
 	 */
-	bool isOk_;
+	bool is_ok_;
 
 	/**
 	 * Conversion map from a string to it's hex version
