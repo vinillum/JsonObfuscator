@@ -8,6 +8,7 @@
 #include "Parser.h"
 
 #include <sstream>
+#include <iostream>
 
 /**
  * Constructor
@@ -15,22 +16,19 @@
 Parser::Parser(const std::string& inputFile,
 				const std::string& outputFile,
 				const std::string& mappingFile) :
-	inputFile_{},
-	outputFile_{},
-	mappingFile_{},
+	inputFile_{inputFile},
+	outputFile_{outputFile},
+	mappingFile_{mappingFile},
 	isOk_{true} {
 
-	inputFile_.open(inputFile);
 	if (!inputFile_.is_open()) {
 		isOk_ = false;
 	}
 
-	outputFile_.open(outputFile);
 	if (!outputFile_.is_open()) {
 		isOk_ = false;
 	}
 
-	mappingFile_.open(mappingFile);
 	if (!mappingFile_.is_open()) {
 		isOk_ = false;
 	}
@@ -172,7 +170,7 @@ std::string Parser::ConvertToHexString(const std::string& identifier) {
 	// Is escape sequence expected next?
 	bool escapeSeq{false};
 
-	for (const char character: identifier) {
+	for (const unsigned char character: identifier) {
 
 		// Escape sequence is expected next
 		if (character == '\\') {
