@@ -37,238 +37,284 @@ Parser::Parser(const std::string& input_file,
 	}
 }
 
-void Parser::Parse() {
-	std::stringstream identifier;
-	JsonToken prev_token{JsonToken::None};
-
+char Parser::GetToken() {
 	char character;
-	while (input_file_.get(character)) {
+	if (!input_file_.get(character)) {
+		throw ParserError("Missing token", line_number_, col_number_);
+	}
+	return character;
+}
+
+void Parser::ParseObject() {
+	char character = GetToken();
+	if (character == '{') {
+		output_file_ << character;
 		++col_number_;
-
-		if (!token_stack_.empty() && token_stack_.top() == JsonToken::EscapeSequence) {
-			identifier << character;
-			token_stack_.pop();
-
-		} else if (!token_stack_.empty() && token_stack_.top() == JsonToken::Quotes) {
-			if (character == '\\') {
-				identifier << character;
-				token_stack_.push(JsonToken::EscapeSequence);
-
-			} else if (character == '"') {
-				token_stack_.pop();
-				output_file_ << '"';
-
-				auto it = identifier_map_.find(identifier.str());
-				if (it != identifier_map_.end()) {
-					output_file_ << it->second;
-				} else {
-					auto hex_val = ConvertToHexString(identifier.str());
-					identifier_map_[identifier.str()] = hex_val;
-					output_file_ << hex_val;
-				}
-
-				output_file_ << '"';
-
-				// Determine if this a string or a value for tokenisation purposes
-				if (prev_token == JsonToken::ObjectSeparator ||
-					(!token_stack_.empty() && token_stack_.top() == JsonToken::ArrayEnd)) {
-					prev_token = JsonToken::Value;
-				} else {
-					prev_token = JsonToken::String;
-				}
-
-				identifier.str(std::string{});
-
-			} else if (character == '\n') {
-				throw ParserError("Multiline strings are not supported", line_number_, col_number_);
-
-			} else {
-				identifier << character;
-			}
-
-		} else if (character == '"') {
-			if (prev_token != JsonToken::ArrayStart &&
-				prev_token != JsonToken::ObjectStart &&
-				prev_token != JsonToken::Iterator &&
-				prev_token != JsonToken::ObjectSeparator) {
-				throw ParserError("Misplaced token", line_number_, col_number_);
-			}
-
-			token_stack_.push(JsonToken::Quotes);
-
-		} else {
-			switch (character) {
-			case '{': {
-				if (prev_token != JsonToken::ObjectSeparator &&
-					prev_token != JsonToken::None &&
-					prev_token != JsonToken::ArrayStart &&
-					(prev_token != JsonToken::Iterator ||
-					(!token_stack_.empty() && token_stack_.top() == JsonToken::ObjectEnd))) {
-					throw ParserError("Misplaced token", line_number_, col_number_);
-				}
-
-				output_file_.put(character);
-				token_stack_.push(JsonToken::ObjectEnd);
-				prev_token = JsonToken::ObjectStart;
-				break;
-			}
-
-			case '}': {
-				if (token_stack_.empty() || token_stack_.top() != JsonToken::ObjectEnd) {
-					throw ParserError("Mismatched token", line_number_, col_number_);
-				}
-
-				output_file_.put(character);
-				token_stack_.pop();
-				if (token_stack_.empty()) {
-					prev_token = JsonToken::Done;
-				} else {
-					prev_token = JsonToken::ObjectEnd;
-				}
-				break;
-			}
-
-			case '[': {
-				if (prev_token != JsonToken::ObjectSeparator &&
-					prev_token != JsonToken::ArrayStart &&
-					(prev_token != JsonToken::Iterator ||
-					(!token_stack_.empty() && token_stack_.top() != JsonToken::ArrayEnd))) {
-					throw ParserError("Misplaced token", line_number_, col_number_);
-				}
-
-				output_file_.put(character);
-				token_stack_.push(JsonToken::ArrayEnd);
-				prev_token = JsonToken::ArrayStart;
-				break;
-			}
-
-			case ']': {
-				if (token_stack_.empty() || token_stack_.top() != JsonToken::ArrayEnd) {
-					throw ParserError("Mismatched token", line_number_, col_number_);
-				}
-
-				output_file_.put(character);
-				token_stack_.pop();
-				prev_token = JsonToken::ArrayEnd;
-				break;
-			}
-
-			case ':': {
-				if (prev_token != JsonToken::String) {
-					throw ParserError("Misplaced token", line_number_, col_number_);
-				}
-
-				output_file_.put(character);
-				prev_token = JsonToken::ObjectSeparator;
-				break;
-			}
-
-			case ',': {
-				if (prev_token != JsonToken::Value &&
-					prev_token != JsonToken::ObjectEnd &&
-					prev_token != JsonToken::ArrayEnd) {
-					throw ParserError("Misplaced token", line_number_, col_number_);
-				}
-
-				output_file_.put(character);
-				prev_token = JsonToken::Iterator;
-				break;
-			}
-
-			case 't': // FALL-THROUGH
-			case 'f': // FALL-THROUGH
-			case 'n': {
-				if (prev_token != JsonToken::ObjectSeparator &&
-					prev_token != JsonToken::ArrayStart &&
-					(prev_token != JsonToken::Iterator ||
-					(!token_stack_.empty() && token_stack_.top() != JsonToken::ArrayEnd))) {
-					throw ParserError("Misplaced token", line_number_, col_number_);
-				}
-
-				identifier << character;
-				int next_chars;
-				std::string compare_string;
-				if (character == 't') {
-					next_chars = 3;
-					compare_string = "true";
-				} else if (character == 'f') {
-					next_chars = 4;
-					compare_string = "false";
-				} else {
-					next_chars = 3;
-					compare_string = "null";
-				}
-
-				while (next_chars > 0 && input_file_.get(character)) {
-					++col_number_;
-					identifier << character;
-					--next_chars;
-				}
-
-				if (next_chars > 0 || identifier.str() != compare_string) {
-					throw ParserError("Unexpected token", line_number_, col_number_);
-				}
-
-				output_file_ << identifier.str();
-				prev_token = JsonToken::Value;
-				identifier.str(std::string{});
-				break;
-			}
-
-			case '\n': {
-				output_file_.put(character);
-				++line_number_;
-				col_number_ = 0;
-				break;
-			}
-
-			default:
-				if (isdigit(character) || character == '-') {
-					if (prev_token != JsonToken::ObjectSeparator &&
-						prev_token != JsonToken::ArrayStart &&
-						prev_token != JsonToken::Iterator) {
-						throw ParserError("Misplaced token", line_number_, col_number_);
-					}
-
-					input_file_.putback(character);
-					auto stream_position_start = input_file_.tellg();
-
-					double digit;
-					input_file_ >> digit;
-					if (input_file_.fail()) {
-						throw ParserError("Invalid number", line_number_, col_number_);
-					}
-
-					// We have move past the digit now, and if we streamed
-					// just read digit out, it would get incorrectly formatted
-					// thus re-stream original characters
-					auto stream_position_end = input_file_.tellg();
-					input_file_.seekg(stream_position_start);
-					while (input_file_.tellg() != stream_position_end) {
-						++col_number_;
-						input_file_.get(character);
-						output_file_ << character;
-					}
-					--col_number_;
-
-					prev_token = JsonToken::Value;
-
-				} else if (!isspace(character)) {
-					throw ParserError("Unexpected token", line_number_, col_number_);
-
-				} else {
-					output_file_.put(character);
-				}
-			}
-		}
+	} else {
+		throw ParserError("Unexpected token", line_number_, col_number_);
 	}
 
-	if (!input_file_.eof()) {
-		throw std::runtime_error("Could not finish reading input file");
-	} else if (prev_token == JsonToken::None ) {
-		throw std::runtime_error("No JSON object found inside input file");
-	} else if (prev_token != JsonToken::Done ) {
-		throw std::runtime_error("JSON object was not finished");
+	ParseSpace();
+
+	character = GetToken();
+	if (character == '}') {
+		output_file_ << character;
+		++col_number_;
+		return;
+	} else if (character == '"') {
+		input_file_.putback(character);
+
+		ParsePair();
+	} else {
+		throw ParserError("Unexpected token", line_number_, col_number_);
+	}
+
+	ParseSpace();
+
+	character = GetToken();
+	while (character == ',') {
+		output_file_ << character;
+		++col_number_;
+
+		ParseSpace();
+		ParsePair();
+		ParseSpace();
+
+		character = GetToken();
+	}
+
+	if (character == '}') {
+		output_file_ << character;
+		++col_number_;
+	} else {
+		throw ParserError("Unexpected token", line_number_, col_number_);
+	}
+}
+
+void Parser::ParsePair() {
+	ParseString();
+	ParseSpace();
+
+	char character = GetToken();
+	if (character == ':') {
+		output_file_ << character;
+		++col_number_;
+	} else {
+		throw ParserError("Unexpected token", line_number_, col_number_);
+	}
+
+	ParseSpace();
+	ParseValue();
+}
+
+void Parser::ParseSpace() {
+	char character;
+	while (input_file_.get(character)) {
+		if (character == '\n') {
+			++line_number_;
+			col_number_ = 1;
+			output_file_ << character;
+		} else if (isspace(character)) {
+			output_file_ << character;
+			++col_number_;
+		} else {
+			input_file_.putback(character);
+			break;
+		}
+	}
+}
+
+void Parser::ParseArray() {
+	char character = GetToken();
+	if (character == '[') {
+		output_file_ << character;
+		++col_number_;
+	} else {
+		throw ParserError("Unexpected token", line_number_, col_number_);
+	}
+
+	ParseSpace();
+
+	character = GetToken();
+	if (character == ']') {
+		output_file_ << character;
+		++col_number_;
+		return;
+	}
+
+	input_file_.putback(character);
+
+	ParseValue();
+	ParseSpace();
+
+	character = GetToken();
+	while (character == ',') {
+		output_file_ << character;
+		++col_number_;
+
+		ParseSpace();
+		ParseValue();
+		ParseSpace();
+
+		character = GetToken();
+	}
+
+	if (character == ']') {
+		output_file_ << character;
+		++col_number_;
+	} else {
+		throw ParserError("Unexpected token", line_number_, col_number_);
+	}
+}
+
+void Parser::ParseConst() {
+	char character = GetToken();
+	int next_chars;
+	std::string compare_string;
+	if (character == 't') {
+		next_chars = 3;
+		compare_string = "true";
+	} else if (character == 'f') {
+		next_chars = 4;
+		compare_string = "false";
+	} else if (character == 'n') {
+		next_chars = 3;
+		compare_string = "null";
+	} else {
+		throw ParserError("Unexpected token", line_number_, col_number_);
+	}
+
+	std::stringstream identifier;
+	identifier << character;
+	while (next_chars > 0 && input_file_.get(character)) {
+		++col_number_;
+		identifier << character;
+		--next_chars;
+	}
+
+	if (next_chars > 0 || identifier.str() != compare_string) {
+		throw ParserError("Unexpected token", line_number_, col_number_);
+	}
+
+	output_file_ << identifier.str();
+}
+
+void Parser::ParseNumber() {
+	char character = GetToken();
+	if (isdigit(character) || character == '-') {
+		input_file_.putback(character);
+		auto stream_position_start = input_file_.tellg();
+
+		double digit;
+		input_file_ >> digit;
+		if (input_file_.fail()) {
+			throw ParserError("Invalid number", line_number_, col_number_);
+		}
+
+		// We have move past the digit now, and if we streamed
+		// just read digit out, it would get incorrectly formatted
+		// thus re-stream original characters
+		auto stream_position_end = input_file_.tellg();
+		input_file_.seekg(stream_position_start);
+		while (input_file_.tellg() != stream_position_end) {
+			++col_number_;
+			input_file_.get(character);
+			output_file_ << character;
+		}
+		--col_number_;
+
+	} else {
+		throw ParserError("Unexpected token", line_number_, col_number_);
+	}
+}
+
+void Parser::ParseValue() {
+	char character = GetToken();
+	switch (character) {
+	case '{': {
+		input_file_.putback(character);
+		ParseObject();
+		break;
+	}
+
+	case '[': {
+		input_file_.putback(character);
+		ParseArray();
+		break;
+	}
+
+	case '"': {
+		input_file_.putback(character);
+		ParseString();
+		break;
+	}
+
+	case 't': // FALL-THROUGH
+	case 'f': // FALL-THROUGH
+	case 'n': {
+		input_file_.putback(character);
+		ParseConst();
+		break;
+	}
+
+	default:
+		input_file_.putback(character);
+		ParseNumber();
+		break;
+	}
+}
+
+void Parser::ParseString() {
+	char character = GetToken();
+	if (character == '"') {
+		output_file_ << character;
+		++col_number_;
+	} else {
+		throw ParserError("Unexpected token", line_number_, col_number_);
+	}
+
+	bool escape_seq{false};
+	std::stringstream identifier;
+
+	while (input_file_.get(character)) {
+		if (escape_seq) {
+			identifier << character;
+			++col_number_;
+			escape_seq = false;
+		} else if (character == '\\') {
+			identifier << character;
+			++col_number_;
+			escape_seq = true;
+		} else if (character == '\n') {
+			++line_number_;
+			throw ParserError("Multi-line strings are not supported", line_number_, 1);
+		} else if (character == '"') {
+			auto it = identifier_map_.find(identifier.str());
+			if (it != identifier_map_.end()) {
+				output_file_ << it->second;
+			} else {
+				auto hex_val = ConvertToHexString(identifier.str());
+				identifier_map_[identifier.str()] = hex_val;
+				output_file_ << hex_val;
+			}
+
+			output_file_ << character;
+			++col_number_;
+			return;
+		} else {
+			identifier << character;
+			++col_number_;
+		}
+	}
+}
+
+void Parser::Parse() {
+	ParseSpace();
+	ParseObject();
+	ParseSpace();
+
+	if (!input_file_.eof() ) {
+		throw ParserError("Unexpected token", line_number_, col_number_);
 	}
 }
 

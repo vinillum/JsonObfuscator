@@ -13,8 +13,6 @@
 #include <stack>
 #include <string>
 
-#include "JsonToken.h"
-
 /**
  * Parser for JSON files
  *
@@ -59,6 +57,51 @@ private:
 	std::string ParseEscapeSequence(std::stringstream& identifier_stream);
 
 	/**
+	 * Parse { } object block
+	 */
+	void ParseObject();
+
+	/**
+	 * Parse space inbetween tokens
+	 */
+	void ParseSpace();
+
+	/**
+	 * Parse strings inbetween quotes
+	 */
+	void ParseString();
+
+	/**
+	 * Parse value by calling other parsers
+	 */
+	void ParseValue();
+
+	/**
+	 * Parse name/value pair
+	 */
+	void ParsePair();
+
+	/**
+	 * Pare [ ] array block
+	 */
+	void ParseArray();
+
+	/**
+	 * Parse true, false and null
+	 */
+	void ParseConst();
+
+	/**
+	 * Parse number
+	 */
+	void ParseNumber();
+
+	/**
+	 * Get next token
+	 */
+	char GetToken();
+
+	/**
 	 * Input stream
 	 */
 	std::ifstream input_file_;
@@ -77,11 +120,6 @@ private:
 	 * Conversion map from a string to it's hex version
 	 */
 	std::map<std::string, std::string> identifier_map_;
-
-	/**
-	 * Stack of processed JSON tokens
-	 */
-	std::stack<JsonToken> token_stack_;
 
 	/**
 	 * Current line number in the input stream
