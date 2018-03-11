@@ -58,7 +58,7 @@ private:
 	/**
 	 * Parses escape sequence in a string
 	 */
-	std::string ParseEscapeSequence(const char character);
+	std::string ParseEscapeSequence(std::stringstream& identifier_stream);
 
 	/**
 	 * Input stream

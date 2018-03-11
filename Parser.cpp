@@ -40,7 +40,7 @@ void Parser::Parse() {
 
 		if (escape_seq) {
 			escape_seq = false;
-			identifier << ParseEscapeSequence(character);
+			identifier << character;
 
 		} else if (character == '"') {
 
@@ -65,10 +65,9 @@ void Parser::Parse() {
 			}
 
 		} else if (in_string) {
+			identifier << character;
 			if (character == '\\') {
 				escape_seq = true;
-			} else {
-				identifier << character;
 			}
 
 		} else {
@@ -81,7 +80,12 @@ void Parser::Parse() {
 	}
 }
 
-std::string Parser::ParseEscapeSequence(const char character) {
+std::string Parser::ParseEscapeSequence(std::stringstream& identifier_stream) {
+	char character;
+	if (!identifier_stream.get(character)) {
+		is_ok_ = false;
+		return "";
+	}
 
 	// No apparent connection between an escape sequence and it's
 	// hex representation could be found, so just hard code it
@@ -115,7 +119,7 @@ std::string Parser::ParseEscapeSequence(const char character) {
 		int skip_chars{4};
 		std::string ret_val{"\\u"};
 		char unicode_character;
-		while (skip_chars > 0 && input_file_.get(unicode_character)) {
+		while (skip_chars > 0 && identifier_stream.get(unicode_character)) {
 			ret_val += unicode_character;
 			--skip_chars;
 		}
@@ -128,29 +132,18 @@ std::string Parser::ParseEscapeSequence(const char character) {
 
 std::string Parser::ConvertToHexString(const std::string& identifier) {
 	std::stringstream ret_val;
+	std::stringstream identifier_stream{identifier};
 	ret_val << std::hex;
 
-	int skip_chars{0};
-	bool escape_seq{false};
-
-	for (const unsigned char character: identifier) {
+	char character;
+	while (identifier_stream.get(character)) {
 
 		if (character == '\\') {
-			escape_seq = true;
-			ret_val << character;
-
-		} else if (escape_seq) {
-			escape_seq = false;
-			skip_chars = 4;
-			ret_val << character;
-
-		} else if (skip_chars > 0) {
-			--skip_chars;
-			ret_val << character;
+			ret_val << ParseEscapeSequence(identifier_stream);
 
 		} else {
 			ret_val << "\\u";
-			int converted_char = static_cast<int>(character);
+			unsigned int converted_char = static_cast<unsigned char>(character);
 
 			// Prepend zeroes if a hex representation is shorter than 4 characters
 			if (converted_char < 0x1000) {
