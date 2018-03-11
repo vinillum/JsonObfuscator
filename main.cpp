@@ -5,10 +5,13 @@
  *      Author: Juozas Varonenka
  */
 
-#include "Parser.h"
-
-#include <iostream>
+#include <cstdlib>
 #include <cstring>
+#include <exception>
+#include <iostream>
+#include <string>
+
+#include "Parser.h"
 
 constexpr int kExpectedNoOfArgs{7};
 
@@ -50,23 +53,16 @@ int main(int argc, char* argv[]) {
 		showHelp();
 	}
 
-	Parser parser(input_file, output_file, mapping_file);
-
-	if (parser.IsOk()) {
+	try {
+		Parser parser(input_file, output_file, mapping_file);
 		parser.Parse();
-	} else {
-		std::cerr << "Failed to initialise parser" << std::endl;
-	}
-
-	if (parser.IsOk()) {
 		parser.OutputMappings();
-	} else {
-		std::cerr << "Failed to parse the JSON file" << std::endl;
+	}
+	catch (std::exception& e) {
+		std::cerr << e.what();
+		return 1;
 	}
 
-	if (parser.IsOk()) {
-		std::cout << "Successfully parsed the JSON file" << std::endl;
-	}
-
-	return (parser.IsOk() ? 0 : 1);
+	std::cout << "Successfully parsed the JSON file" << std::endl;
+	return 0;
 }

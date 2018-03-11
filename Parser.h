@@ -9,8 +9,11 @@
 #define PARSER_H_
 
 #include <fstream>
-#include <string>
 #include <map>
+#include <stack>
+#include <string>
+
+#include "JsonToken.h"
 
 /**
  * Parser for JSON files
@@ -31,11 +34,6 @@ public:
 	 * Parse the input file, writing to output file immediately
 	 */
 	void Parse();
-
-	/**
-	 * Return parser status
-	 */
-	bool IsOk() { return is_ok_; }
 
 	/**
 	 * Outputs mappings into a file
@@ -76,14 +74,24 @@ private:
 	std::ofstream mapping_file_;
 
 	/**
-	 * Parser status
-	 */
-	bool is_ok_;
-
-	/**
 	 * Conversion map from a string to it's hex version
 	 */
-	std::map<std::string, std::string> identifierMap_;
+	std::map<std::string, std::string> identifier_map_;
+
+	/**
+	 * Stack of processed JSON tokens
+	 */
+	std::stack<JsonToken> token_stack_;
+
+	/**
+	 * Current line number in the input stream
+	 */
+	int line_number_;
+
+	/**
+	 * Current column number in the input stream
+	 */
+	int col_number_;
 };
 
 #endif /* PARSER_H_ */

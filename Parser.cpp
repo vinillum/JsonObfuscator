@@ -7,7 +7,13 @@
 
 #include "Parser.h"
 
+#include <cctype>
+#include <iostream>
 #include <sstream>
+#include <stdexcept>
+#include <utility>
+
+#include "ParserError.h"
 
 Parser::Parser(const std::string& input_file,
 				const std::string& output_file,
@@ -15,76 +21,261 @@ Parser::Parser(const std::string& input_file,
 	input_file_{input_file},
 	output_file_{output_file},
 	mapping_file_{mapping_file},
-	is_ok_{true} {
+	line_number_{1},
+	col_number_{0} {
 
 	if (!input_file_.is_open()) {
-		is_ok_ = false;
+		throw std::runtime_error("Could not open input file");
 	}
 
 	if (!output_file_.is_open()) {
-		is_ok_ = false;
+		throw std::runtime_error("Could not open output file");
 	}
 
 	if (!mapping_file_.is_open()) {
-		is_ok_ = false;
+		throw std::runtime_error("Could not open mapping file");
 	}
 }
 
 void Parser::Parse() {
-	bool in_string{false};
 	std::stringstream identifier;
-	bool escape_seq{false};
+	JsonToken prev_token{JsonToken::None};
 
 	char character;
 	while (input_file_.get(character)) {
+		++col_number_;
 
-		if (escape_seq) {
-			escape_seq = false;
+		if (!token_stack_.empty() && token_stack_.top() == JsonToken::EscapeSequence) {
 			identifier << character;
+			token_stack_.pop();
 
-		} else if (character == '"') {
+		} else if (!token_stack_.empty() && token_stack_.top() == JsonToken::Quotes) {
+			if (character == '\\') {
+				identifier << character;
+				token_stack_.push(JsonToken::EscapeSequence);
 
-			if (!in_string) {
-				in_string = true;
-				identifier.str(std::string{});
-
-			} else {
-				in_string = false;
+			} else if (character == '"') {
+				token_stack_.pop();
 				output_file_ << '"';
 
-				auto it = identifierMap_.find(identifier.str());
-				if (it != identifierMap_.end()) {
+				auto it = identifier_map_.find(identifier.str());
+				if (it != identifier_map_.end()) {
 					output_file_ << it->second;
 				} else {
 					auto hex_val = ConvertToHexString(identifier.str());
-					identifierMap_[identifier.str()] = hex_val;
+					identifier_map_[identifier.str()] = hex_val;
 					output_file_ << hex_val;
 				}
 
 				output_file_ << '"';
+
+				// Determine if this a string or a value for tokenisation purposes
+				if (prev_token == JsonToken::ObjectSeparator ||
+					(!token_stack_.empty() && token_stack_.top() == JsonToken::ArrayEnd)) {
+					prev_token = JsonToken::Value;
+				} else {
+					prev_token = JsonToken::String;
+				}
+
+				identifier.str(std::string{});
+
+			} else if (character == '\n') {
+				throw ParserError("Multiline strings are not supported", line_number_, col_number_);
+
+			} else {
+				identifier << character;
 			}
 
-		} else if (in_string) {
-			identifier << character;
-			if (character == '\\') {
-				escape_seq = true;
+		} else if (character == '"') {
+			if (prev_token != JsonToken::ArrayStart &&
+				prev_token != JsonToken::ObjectStart &&
+				prev_token != JsonToken::Iterator &&
+				prev_token != JsonToken::ObjectSeparator) {
+				throw ParserError("Misplaced token", line_number_, col_number_);
 			}
+
+			token_stack_.push(JsonToken::Quotes);
 
 		} else {
-			output_file_.put(character);
+			switch (character) {
+			case '{': {
+				if (prev_token != JsonToken::ObjectSeparator &&
+					prev_token != JsonToken::None &&
+					prev_token != JsonToken::ArrayStart &&
+					(prev_token != JsonToken::Iterator ||
+					(!token_stack_.empty() && token_stack_.top() == JsonToken::ObjectEnd))) {
+					throw ParserError("Misplaced token", line_number_, col_number_);
+				}
+
+				output_file_.put(character);
+				token_stack_.push(JsonToken::ObjectEnd);
+				prev_token = JsonToken::ObjectStart;
+				break;
+			}
+
+			case '}': {
+				if (token_stack_.empty() || token_stack_.top() != JsonToken::ObjectEnd) {
+					throw ParserError("Mismatched token", line_number_, col_number_);
+				}
+
+				output_file_.put(character);
+				token_stack_.pop();
+				if (token_stack_.empty()) {
+					prev_token = JsonToken::Done;
+				} else {
+					prev_token = JsonToken::ObjectEnd;
+				}
+				break;
+			}
+
+			case '[': {
+				if (prev_token != JsonToken::ObjectSeparator &&
+					prev_token != JsonToken::ArrayStart &&
+					(prev_token != JsonToken::Iterator ||
+					(!token_stack_.empty() && token_stack_.top() != JsonToken::ArrayEnd))) {
+					throw ParserError("Misplaced token", line_number_, col_number_);
+				}
+
+				output_file_.put(character);
+				token_stack_.push(JsonToken::ArrayEnd);
+				prev_token = JsonToken::ArrayStart;
+				break;
+			}
+
+			case ']': {
+				if (token_stack_.empty() || token_stack_.top() != JsonToken::ArrayEnd) {
+					throw ParserError("Mismatched token", line_number_, col_number_);
+				}
+
+				output_file_.put(character);
+				token_stack_.pop();
+				prev_token = JsonToken::ArrayEnd;
+				break;
+			}
+
+			case ':': {
+				if (prev_token != JsonToken::String) {
+					throw ParserError("Misplaced token", line_number_, col_number_);
+				}
+
+				output_file_.put(character);
+				prev_token = JsonToken::ObjectSeparator;
+				break;
+			}
+
+			case ',': {
+				if (prev_token != JsonToken::Value &&
+					prev_token != JsonToken::ObjectEnd &&
+					prev_token != JsonToken::ArrayEnd) {
+					throw ParserError("Misplaced token", line_number_, col_number_);
+				}
+
+				output_file_.put(character);
+				prev_token = JsonToken::Iterator;
+				break;
+			}
+
+			case 't': // FALL-THROUGH
+			case 'f': // FALL-THROUGH
+			case 'n': {
+				if (prev_token != JsonToken::ObjectSeparator &&
+					prev_token != JsonToken::ArrayStart &&
+					(prev_token != JsonToken::Iterator ||
+					(!token_stack_.empty() && token_stack_.top() != JsonToken::ArrayEnd))) {
+					throw ParserError("Misplaced token", line_number_, col_number_);
+				}
+
+				identifier << character;
+				int next_chars;
+				std::string compare_string;
+				if (character == 't') {
+					next_chars = 3;
+					compare_string = "true";
+				} else if (character == 'f') {
+					next_chars = 4;
+					compare_string = "false";
+				} else {
+					next_chars = 3;
+					compare_string = "null";
+				}
+
+				while (next_chars > 0 && input_file_.get(character)) {
+					++col_number_;
+					identifier << character;
+					--next_chars;
+				}
+
+				if (next_chars > 0 || identifier.str() != compare_string) {
+					throw ParserError("Unexpected token", line_number_, col_number_);
+				}
+
+				output_file_ << identifier.str();
+				prev_token = JsonToken::Value;
+				identifier.str(std::string{});
+				break;
+			}
+
+			case '\n': {
+				output_file_.put(character);
+				++line_number_;
+				col_number_ = 0;
+				break;
+			}
+
+			default:
+				if (isdigit(character) || character == '-') {
+					if (prev_token != JsonToken::ObjectSeparator &&
+						prev_token != JsonToken::ArrayStart &&
+						prev_token != JsonToken::Iterator) {
+						throw ParserError("Misplaced token", line_number_, col_number_);
+					}
+
+					input_file_.putback(character);
+					auto stream_position_start = input_file_.tellg();
+
+					double digit;
+					input_file_ >> digit;
+					if (input_file_.fail()) {
+						throw ParserError("Invalid number", line_number_, col_number_);
+					}
+
+					// We have move past the digit now, and if we streamed
+					// just read digit out, it would get incorrectly formatted
+					// thus re-stream original characters
+					auto stream_position_end = input_file_.tellg();
+					input_file_.seekg(stream_position_start);
+					while (input_file_.tellg() != stream_position_end) {
+						++col_number_;
+						input_file_.get(character);
+						output_file_ << character;
+					}
+					--col_number_;
+
+					prev_token = JsonToken::Value;
+
+				} else if (!isspace(character)) {
+					throw ParserError("Unexpected token", line_number_, col_number_);
+
+				} else {
+					output_file_.put(character);
+				}
+			}
 		}
 	}
 
 	if (!input_file_.eof()) {
-		is_ok_ = false;
+		throw std::runtime_error("Could not finish reading input file");
+	} else if (prev_token == JsonToken::None ) {
+		throw std::runtime_error("No JSON object found inside input file");
+	} else if (prev_token != JsonToken::Done ) {
+		throw std::runtime_error("JSON object was not finished");
 	}
 }
 
 std::string Parser::ParseEscapeSequence(std::stringstream& identifier_stream) {
 	char character;
 	if (!identifier_stream.get(character)) {
-		is_ok_ = false;
-		return "";
+		throw ParserError("Missing escape sequence", line_number_, col_number_);
 	}
 
 	// No apparent connection between an escape sequence and it's
@@ -120,14 +311,20 @@ std::string Parser::ParseEscapeSequence(std::stringstream& identifier_stream) {
 		std::string ret_val{"\\u"};
 		char unicode_character;
 		while (skip_chars > 0 && identifier_stream.get(unicode_character)) {
+			if (!isxdigit(unicode_character)) {
+				throw ParserError("Invalid unicode character", line_number_, col_number_);
+			}
 			ret_val += unicode_character;
 			--skip_chars;
+		}
+
+		if (skip_chars > 0) {
+			throw ParserError("Unfinished unicode character", line_number_, col_number_);
 		}
 		return ret_val;
 	}
 
-	is_ok_ = false;
-	return "";
+	throw ParserError("Invalid escape sequence", line_number_, col_number_);
 }
 
 std::string Parser::ConvertToHexString(const std::string& identifier) {
@@ -159,6 +356,7 @@ std::string Parser::ConvertToHexString(const std::string& identifier) {
 			ret_val << converted_char;
 		}
 	}
+
 	return ret_val.str();
 }
 
@@ -166,7 +364,7 @@ void Parser::OutputMappings() {
 	bool first_entry{true};
 
 	mapping_file_ << "{" << std::endl;
-	for (const auto& entry : identifierMap_ ) {
+	for (const auto& entry : identifier_map_ ) {
 		if (!first_entry) {
 			mapping_file_ << "," << std::endl;
 		} else {
