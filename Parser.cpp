@@ -13,8 +13,6 @@
 #include <stdexcept>
 #include <utility>
 
-#include "ParserError.h"
-
 Parser::Parser(const std::string& input_file,
 				const std::string& output_file,
 				const std::string& mapping_file) :
@@ -37,14 +35,6 @@ Parser::Parser(const std::string& input_file,
 	}
 }
 
-char Parser::GetToken() {
-	char character;
-	if (!input_file_.get(character)) {
-		throw ParserError("Missing token", line_number_, col_number_);
-	}
-	return character;
-}
-
 void Parser::ParseObject() {
 	char character = GetToken();
 	if (character == '{') {
@@ -56,14 +46,13 @@ void Parser::ParseObject() {
 
 	ParseSpace();
 
-	character = GetToken();
+	character = PeekToken();
 	if (character == '}') {
+		GetToken();
 		output_file_ << character;
 		++col_number_;
 		return;
 	} else if (character == '"') {
-		input_file_.putback(character);
-
 		ParsePair();
 	} else {
 		throw ParserError("Unexpected token", line_number_, col_number_);
@@ -135,14 +124,13 @@ void Parser::ParseArray() {
 
 	ParseSpace();
 
-	character = GetToken();
+	character = PeekToken();
 	if (character == ']') {
+		GetToken();
 		output_file_ << character;
 		++col_number_;
 		return;
 	}
-
-	input_file_.putback(character);
 
 	ParseValue();
 	ParseSpace();
@@ -200,9 +188,8 @@ void Parser::ParseConst() {
 }
 
 void Parser::ParseNumber() {
-	char character = GetToken();
+	char character = PeekToken();
 	if (isdigit(character) || character == '-') {
-		input_file_.putback(character);
 		auto stream_position_start = input_file_.tellg();
 
 		double digit;
@@ -229,22 +216,19 @@ void Parser::ParseNumber() {
 }
 
 void Parser::ParseValue() {
-	char character = GetToken();
+	char character = PeekToken();
 	switch (character) {
 	case '{': {
-		input_file_.putback(character);
 		ParseObject();
 		break;
 	}
 
 	case '[': {
-		input_file_.putback(character);
 		ParseArray();
 		break;
 	}
 
 	case '"': {
-		input_file_.putback(character);
 		ParseString();
 		break;
 	}
@@ -252,13 +236,11 @@ void Parser::ParseValue() {
 	case 't': // FALL-THROUGH
 	case 'f': // FALL-THROUGH
 	case 'n': {
-		input_file_.putback(character);
 		ParseConst();
 		break;
 	}
 
 	default:
-		input_file_.putback(character);
 		ParseNumber();
 		break;
 	}

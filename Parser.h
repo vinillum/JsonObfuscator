@@ -10,8 +10,9 @@
 
 #include <fstream>
 #include <map>
-#include <stack>
 #include <string>
+
+#include "ParserError.h"
 
 /**
  * Parser for JSON files
@@ -99,7 +100,20 @@ private:
 	/**
 	 * Get next token
 	 */
-	char GetToken();
+	char GetToken() {
+		char character;
+		if (!input_file_.get(character)) {
+			throw ParserError("Missing token", line_number_, col_number_);
+		}
+		return character;
+	}
+
+	/**
+	 * Peek at next token
+	 */
+	char PeekToken() {
+		return input_file_.peek();
+	}
 
 	/**
 	 * Input stream
