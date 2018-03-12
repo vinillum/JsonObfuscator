@@ -7,6 +7,7 @@
 
 #include "Parser.h"
 
+#include <algorithm>
 #include <cctype>
 #include <iostream>
 #include <sstream>
@@ -370,18 +371,57 @@ std::string Parser::ConvertToHexString(const std::string& identifier) {
 			ret_val << "\\u";
 			unsigned int converted_char = static_cast<unsigned char>(character);
 
-			// Prepend zeroes if a hex representation is shorter than 4 characters
-			if (converted_char < 0x1000) {
-				ret_val << 0;
-			}
-			if (converted_char < 0x100) {
-				ret_val << 0;
-			}
-			if (converted_char < 0x10) {
-				ret_val << 0;
-			}
+			// Unicode encoding
+			if (converted_char & 0b10000000) {
+				uint32_t code_point{0};
+				int read_next;
+				if ((converted_char & 0b11110000) == 0b11110000) {
+					read_next = 3;
+					code_point |= (converted_char & 0b00000111) << 18;
+				} else if ((converted_char & 0b11100000) == 0b11100000) {
+					read_next = 2;
+					code_point |= (converted_char & 0b00001111) << 12;
+				} else if ((converted_char & 0b11000000) == 0b11000000) {
+					read_next = 1;
+					code_point |= (converted_char & 0b00011111) << 6;
+				}
+				while (read_next > 0 && identifier_stream.get(character)) {
+					converted_char = static_cast<unsigned char>(character);
+					code_point |= (converted_char & 0b00111111) << ((read_next - 1) * 6);
+					--read_next;
+				}
 
-			ret_val << converted_char;
+				if (read_next > 0) {
+					throw ParserError("Invalid UTF-8 encoding", line_number_, col_number_);
+				}
+
+				if (code_point < 0xd800) {
+					if (code_point < 0x1000) {
+						ret_val << 0;
+					}
+					if (code_point < 0x100) {
+						ret_val << 0;
+					}
+					if (code_point < 0x10) {
+						ret_val << 0;
+					}
+					ret_val << code_point;
+				} else if (code_point > 0xdfff) {
+					uint32_t high_pair = (code_point - 0x10000) / 0x400 + 0xD800;
+					uint32_t low_point = (code_point - 0x10000) % 0x400 + 0xDC00;
+					ret_val << high_pair << "\\u" << low_point;
+				} else {
+					throw ParserError("Invalid code point", line_number_, col_number_);
+				}
+
+			// ASCII encoding
+			} else {
+				ret_val << "00";
+				if (converted_char < 0x10) {
+					ret_val << 0;
+				}
+				ret_val << converted_char;
+			}
 		}
 	}
 
