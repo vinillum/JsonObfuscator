@@ -103,7 +103,7 @@ private:
 	char GetToken() {
 		char character;
 		if (!input_file_.get(character)) {
-			throw ParserError("Missing token", line_number_, col_number_);
+			RaiseError("Missing token");
 		}
 		return character;
 	}
@@ -113,6 +113,13 @@ private:
 	 */
 	char PeekToken() {
 		return input_file_.peek();
+	}
+
+	/**
+	 * Raise a parsing error
+	 */
+	void RaiseError(const std::string& message) {
+		throw ParserError(message, line_number_, col_number_);
 	}
 
 	/**

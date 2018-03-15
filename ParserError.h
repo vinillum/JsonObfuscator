@@ -1,5 +1,5 @@
 /*
- * JsonDelimiter.h
+ * ParserError.h
  *
  *  Created on: 11 Mar 2018
  *      Author: Juozas Varonenka
@@ -19,7 +19,7 @@ class ParserError: public std::exception {
 public:
 	ParserError(const std::string& message, int line_number, int col_number):
 		message_{} {
-			std::stringstream message_stream;
+		std::stringstream message_stream;
 		message_stream << "Line: "
 						<< line_number
 						<< ", Column: "
@@ -44,7 +44,7 @@ public:
 private:
 
 	/**
-	 * Formatter error message
+	 * Formatted error message
 	 */
 	std::string message_;
 };

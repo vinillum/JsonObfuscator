@@ -7,7 +7,6 @@
 
 #include "Parser.h"
 
-#include <algorithm>
 #include <cctype>
 #include <iostream>
 #include <sstream>
@@ -42,7 +41,7 @@ void Parser::ParseObject() {
 		output_file_ << character;
 		++col_number_;
 	} else {
-		throw ParserError("Unexpected token", line_number_, col_number_);
+		RaiseError("Unexpected token");
 	}
 
 	ParseSpace();
@@ -56,7 +55,7 @@ void Parser::ParseObject() {
 	} else if (character == '"') {
 		ParsePair();
 	} else {
-		throw ParserError("Unexpected token", line_number_, col_number_);
+		RaiseError("Unexpected token");
 	}
 
 	ParseSpace();
@@ -77,7 +76,7 @@ void Parser::ParseObject() {
 		output_file_ << character;
 		++col_number_;
 	} else {
-		throw ParserError("Unexpected token", line_number_, col_number_);
+		RaiseError("Unexpected token");
 	}
 }
 
@@ -90,7 +89,7 @@ void Parser::ParsePair() {
 		output_file_ << character;
 		++col_number_;
 	} else {
-		throw ParserError("Unexpected token", line_number_, col_number_);
+		RaiseError("Unexpected token");
 	}
 
 	ParseSpace();
@@ -120,7 +119,7 @@ void Parser::ParseArray() {
 		output_file_ << character;
 		++col_number_;
 	} else {
-		throw ParserError("Unexpected token", line_number_, col_number_);
+		RaiseError("Unexpected token");
 	}
 
 	ParseSpace();
@@ -152,7 +151,7 @@ void Parser::ParseArray() {
 		output_file_ << character;
 		++col_number_;
 	} else {
-		throw ParserError("Unexpected token", line_number_, col_number_);
+		RaiseError("Unexpected token");
 	}
 }
 
@@ -170,7 +169,7 @@ void Parser::ParseConst() {
 		next_chars = 3;
 		compare_string = "null";
 	} else {
-		throw ParserError("Unexpected token", line_number_, col_number_);
+		RaiseError("Unexpected token");
 	}
 
 	std::stringstream identifier;
@@ -182,7 +181,7 @@ void Parser::ParseConst() {
 	}
 
 	if (next_chars > 0 || identifier.str() != compare_string) {
-		throw ParserError("Unexpected token", line_number_, col_number_);
+		RaiseError("Unexpected token");
 	}
 
 	output_file_ << identifier.str();
@@ -196,7 +195,7 @@ void Parser::ParseNumber() {
 		double digit;
 		input_file_ >> digit;
 		if (input_file_.fail()) {
-			throw ParserError("Invalid number", line_number_, col_number_);
+			RaiseError("Invalid number");
 		}
 
 		// We have move past the digit now, and if we streamed
@@ -212,7 +211,7 @@ void Parser::ParseNumber() {
 		--col_number_;
 
 	} else {
-		throw ParserError("Unexpected token", line_number_, col_number_);
+		RaiseError("Unexpected token");
 	}
 }
 
@@ -253,7 +252,7 @@ void Parser::ParseString() {
 		output_file_ << character;
 		++col_number_;
 	} else {
-		throw ParserError("Unexpected token", line_number_, col_number_);
+		RaiseError("Unexpected token");
 	}
 
 	bool escape_seq{false};
@@ -270,7 +269,7 @@ void Parser::ParseString() {
 			escape_seq = true;
 		} else if (character == '\n') {
 			++line_number_;
-			throw ParserError("Multi-line strings are not supported", line_number_, 1);
+			RaiseError("Multi-line strings are not supported");
 		} else if (character == '"') {
 			auto it = identifier_map_.find(identifier.str());
 			if (it != identifier_map_.end()) {
@@ -297,14 +296,14 @@ void Parser::Parse() {
 	ParseSpace();
 
 	if (!input_file_.eof() ) {
-		throw ParserError("Unexpected token", line_number_, col_number_);
+		RaiseError("Unexpected token");
 	}
 }
 
 std::string Parser::ParseEscapeSequence(std::stringstream& identifier_stream) {
 	char character;
 	if (!identifier_stream.get(character)) {
-		throw ParserError("Missing escape sequence", line_number_, col_number_);
+		RaiseError("Missing escape sequence");
 	}
 
 	// No apparent connection between an escape sequence and it's
@@ -341,19 +340,20 @@ std::string Parser::ParseEscapeSequence(std::stringstream& identifier_stream) {
 		char unicode_character;
 		while (skip_chars > 0 && identifier_stream.get(unicode_character)) {
 			if (!isxdigit(unicode_character)) {
-				throw ParserError("Invalid unicode character", line_number_, col_number_);
+				RaiseError("Invalid unicode character");
 			}
 			ret_val += unicode_character;
 			--skip_chars;
 		}
 
 		if (skip_chars > 0) {
-			throw ParserError("Unfinished unicode character", line_number_, col_number_);
+			RaiseError("Unfinished unicode character");
 		}
 		return ret_val;
 	}
 
-	throw ParserError("Invalid escape sequence", line_number_, col_number_);
+	RaiseError("Invalid escape sequence");
+	return "";
 }
 
 std::string Parser::ConvertToHexString(const std::string& identifier) {
@@ -373,6 +373,8 @@ std::string Parser::ConvertToHexString(const std::string& identifier) {
 
 			// Unicode encoding
 			if (converted_char & 0b10000000) {
+
+				// Decode code point from UTF-8
 				uint32_t code_point{0};
 				int read_next;
 				if ((converted_char & 0b11110000) == 0b11110000) {
@@ -385,6 +387,7 @@ std::string Parser::ConvertToHexString(const std::string& identifier) {
 					read_next = 1;
 					code_point |= (converted_char & 0b00011111) << 6;
 				}
+
 				while (read_next > 0 && identifier_stream.get(character)) {
 					converted_char = static_cast<unsigned char>(character);
 					code_point |= (converted_char & 0b00111111) << ((read_next - 1) * 6);
@@ -392,9 +395,10 @@ std::string Parser::ConvertToHexString(const std::string& identifier) {
 				}
 
 				if (read_next > 0) {
-					throw ParserError("Invalid UTF-8 encoding", line_number_, col_number_);
+					RaiseError("Invalid UTF-8 encoding");
 				}
 
+				// Encode code point into surrogate pairs
 				if (code_point < 0xd800) {
 					if (code_point < 0x1000) {
 						ret_val << 0;
@@ -408,10 +412,10 @@ std::string Parser::ConvertToHexString(const std::string& identifier) {
 					ret_val << code_point;
 				} else if (code_point > 0xdfff) {
 					uint32_t high_pair = (code_point - 0x10000) / 0x400 + 0xD800;
-					uint32_t low_point = (code_point - 0x10000) % 0x400 + 0xDC00;
-					ret_val << high_pair << "\\u" << low_point;
+					uint32_t low_pair = (code_point - 0x10000) % 0x400 + 0xDC00;
+					ret_val << high_pair << "\\u" << low_pair;
 				} else {
-					throw ParserError("Invalid code point", line_number_, col_number_);
+					RaiseError("Invalid code point");
 				}
 
 			// ASCII encoding
