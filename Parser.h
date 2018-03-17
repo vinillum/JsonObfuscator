@@ -98,24 +98,6 @@ private:
 	void ParseNumber();
 
 	/**
-	 * Get next token
-	 */
-	char GetToken() {
-		char character;
-		if (!input_file_.get(character)) {
-			RaiseError("Missing token");
-		}
-		return character;
-	}
-
-	/**
-	 * Peek at next token
-	 */
-	char PeekToken() {
-		return input_file_.peek();
-	}
-
-	/**
 	 * Raise a parsing error
 	 */
 	void RaiseError(const std::string& message) {
@@ -151,6 +133,11 @@ private:
 	 * Current column number in the input stream
 	 */
 	int col_number_;
+
+	/**
+	 * Last retrieved token
+	 */
+	char last_token_;
 };
 
 #endif /* PARSER_H_ */

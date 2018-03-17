@@ -20,7 +20,8 @@ Parser::Parser(const std::string& input_file,
 	output_file_{output_file},
 	mapping_file_{mapping_file},
 	line_number_{1},
-	col_number_{0} {
+	col_number_{0},
+	last_token_{0} {
 
 	if (!input_file_.is_open()) {
 		throw std::runtime_error("Could not open input file");
@@ -36,9 +37,8 @@ Parser::Parser(const std::string& input_file,
 }
 
 void Parser::ParseObject() {
-	char character = GetToken();
-	if (character == '{') {
-		output_file_ << character;
+	if (last_token_ == '{') {
+		output_file_ << last_token_;
 		++col_number_;
 	} else {
 		RaiseError("Unexpected token");
@@ -46,13 +46,11 @@ void Parser::ParseObject() {
 
 	ParseSpace();
 
-	character = PeekToken();
-	if (character == '}') {
-		GetToken();
-		output_file_ << character;
+	if (last_token_ == '}') {
+		output_file_ << last_token_;
 		++col_number_;
 		return;
-	} else if (character == '"') {
+	} else if (last_token_ == '"') {
 		ParsePair();
 	} else {
 		RaiseError("Unexpected token");
@@ -60,20 +58,17 @@ void Parser::ParseObject() {
 
 	ParseSpace();
 
-	character = GetToken();
-	while (character == ',') {
-		output_file_ << character;
+	while (last_token_ == ',') {
+		output_file_ << last_token_;
 		++col_number_;
 
 		ParseSpace();
 		ParsePair();
 		ParseSpace();
-
-		character = GetToken();
 	}
 
-	if (character == '}') {
-		output_file_ << character;
+	if (last_token_ == '}') {
+		output_file_ << last_token_;
 		++col_number_;
 	} else {
 		RaiseError("Unexpected token");
@@ -84,9 +79,8 @@ void Parser::ParsePair() {
 	ParseString();
 	ParseSpace();
 
-	char character = GetToken();
-	if (character == ':') {
-		output_file_ << character;
+	if (last_token_ == ':') {
+		output_file_ << last_token_;
 		++col_number_;
 	} else {
 		RaiseError("Unexpected token");
@@ -97,26 +91,23 @@ void Parser::ParsePair() {
 }
 
 void Parser::ParseSpace() {
-	char character;
-	while (input_file_.get(character)) {
-		if (character == '\n') {
+	while (input_file_.get(last_token_)) {
+		if (last_token_ == '\n') {
 			++line_number_;
 			col_number_ = 1;
-			output_file_ << character;
-		} else if (isspace(character)) {
-			output_file_ << character;
+			output_file_ << last_token_;
+		} else if (isspace(last_token_)) {
+			output_file_ << last_token_;
 			++col_number_;
 		} else {
-			input_file_.putback(character);
 			break;
 		}
 	}
 }
 
 void Parser::ParseArray() {
-	char character = GetToken();
-	if (character == '[') {
-		output_file_ << character;
+	if (last_token_ == '[') {
+		output_file_ << last_token_;
 		++col_number_;
 	} else {
 		RaiseError("Unexpected token");
@@ -124,10 +115,8 @@ void Parser::ParseArray() {
 
 	ParseSpace();
 
-	character = PeekToken();
-	if (character == ']') {
-		GetToken();
-		output_file_ << character;
+	if (last_token_ == ']') {
+		output_file_ << last_token_;
 		++col_number_;
 		return;
 	}
@@ -135,20 +124,17 @@ void Parser::ParseArray() {
 	ParseValue();
 	ParseSpace();
 
-	character = GetToken();
-	while (character == ',') {
-		output_file_ << character;
+	while (last_token_ == ',') {
+		output_file_ << last_token_;
 		++col_number_;
 
 		ParseSpace();
 		ParseValue();
 		ParseSpace();
-
-		character = GetToken();
 	}
 
-	if (character == ']') {
-		output_file_ << character;
+	if (last_token_ == ']') {
+		output_file_ << last_token_;
 		++col_number_;
 	} else {
 		RaiseError("Unexpected token");
@@ -156,16 +142,16 @@ void Parser::ParseArray() {
 }
 
 void Parser::ParseConst() {
-	char character = GetToken();
+
 	int next_chars;
 	std::string compare_string;
-	if (character == 't') {
+	if (last_token_ == 't') {
 		next_chars = 3;
 		compare_string = "true";
-	} else if (character == 'f') {
+	} else if (last_token_ == 'f') {
 		next_chars = 4;
 		compare_string = "false";
-	} else if (character == 'n') {
+	} else if (last_token_ == 'n') {
 		next_chars = 3;
 		compare_string = "null";
 	} else {
@@ -173,10 +159,10 @@ void Parser::ParseConst() {
 	}
 
 	std::stringstream identifier;
-	identifier << character;
-	while (next_chars > 0 && input_file_.get(character)) {
+	identifier << last_token_;
+	while (next_chars > 0 && input_file_.get(last_token_)) {
 		++col_number_;
-		identifier << character;
+		identifier << last_token_;
 		--next_chars;
 	}
 
@@ -188,8 +174,8 @@ void Parser::ParseConst() {
 }
 
 void Parser::ParseNumber() {
-	char character = PeekToken();
-	if (isdigit(character) || character == '-') {
+	if (isdigit(last_token_) || last_token_ == '-') {
+		input_file_.putback(last_token_);
 		auto stream_position_start = input_file_.tellg();
 
 		double digit;
@@ -205,8 +191,8 @@ void Parser::ParseNumber() {
 		input_file_.seekg(stream_position_start);
 		while (input_file_.tellg() != stream_position_end) {
 			++col_number_;
-			input_file_.get(character);
-			output_file_ << character;
+			input_file_.get(last_token_);
+			output_file_ << last_token_;
 		}
 		--col_number_;
 
@@ -216,8 +202,7 @@ void Parser::ParseNumber() {
 }
 
 void Parser::ParseValue() {
-	char character = PeekToken();
-	switch (character) {
+	switch (last_token_) {
 	case '{': {
 		ParseObject();
 		break;
@@ -247,9 +232,8 @@ void Parser::ParseValue() {
 }
 
 void Parser::ParseString() {
-	char character = GetToken();
-	if (character == '"') {
-		output_file_ << character;
+	if (last_token_ == '"') {
+		output_file_ << last_token_;
 		++col_number_;
 	} else {
 		RaiseError("Unexpected token");
@@ -258,19 +242,19 @@ void Parser::ParseString() {
 	bool escape_seq{false};
 	std::stringstream identifier;
 
-	while (input_file_.get(character)) {
+	while (input_file_.get(last_token_)) {
 		if (escape_seq) {
-			identifier << character;
+			identifier << last_token_;
 			++col_number_;
 			escape_seq = false;
-		} else if (character == '\\') {
-			identifier << character;
+		} else if (last_token_ == '\\') {
+			identifier << last_token_;
 			++col_number_;
 			escape_seq = true;
-		} else if (character == '\n') {
+		} else if (last_token_ == '\n') {
 			++line_number_;
 			RaiseError("Multi-line strings are not supported");
-		} else if (character == '"') {
+		} else if (last_token_ == '"') {
 			auto it = identifier_map_.find(identifier.str());
 			if (it != identifier_map_.end()) {
 				output_file_ << it->second;
@@ -280,11 +264,11 @@ void Parser::ParseString() {
 				output_file_ << hex_val;
 			}
 
-			output_file_ << character;
+			output_file_ << last_token_;
 			++col_number_;
 			return;
 		} else {
-			identifier << character;
+			identifier << last_token_;
 			++col_number_;
 		}
 	}
