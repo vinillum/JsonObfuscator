@@ -13,6 +13,14 @@
 #include <stdexcept>
 #include <utility>
 
+const std::string Parser::kTrueConst = "true";
+const std::string Parser::kFalseConst = "false";
+const std::string Parser::kNullConst = "null";
+
+const std::string Parser::kUnicodeStart = "\\u";
+
+const std::string Parser::kUnexpectedToken = "Unexpected token";
+
 Parser::Parser(const std::string& input_file,
 				const std::string& output_file,
 				const std::string& mapping_file) :
@@ -37,41 +45,36 @@ Parser::Parser(const std::string& input_file,
 }
 
 void Parser::ParseObject() {
-	if (last_token_ == '{') {
-		output_file_ << last_token_;
-		++col_number_;
+	if (last_token_ == kObjectStart) {
+		StreamToken(output_file_);
 	} else {
-		RaiseError("Unexpected token");
+		RaiseError(kUnexpectedToken);
 	}
 
 	ParseSpace();
 
-	if (last_token_ == '}') {
-		output_file_ << last_token_;
-		++col_number_;
+	if (last_token_ == kObjectEnd) {
+		StreamToken(output_file_);
 		return;
-	} else if (last_token_ == '"') {
+	} else if (last_token_ == kStringDelim) {
 		ParsePair();
 	} else {
-		RaiseError("Unexpected token");
+		RaiseError(kUnexpectedToken);
 	}
 
 	ParseSpace();
 
-	while (last_token_ == ',') {
-		output_file_ << last_token_;
-		++col_number_;
-
+	while (last_token_ == kSeparator) {
+		StreamToken(output_file_);
 		ParseSpace();
 		ParsePair();
 		ParseSpace();
 	}
 
-	if (last_token_ == '}') {
-		output_file_ << last_token_;
-		++col_number_;
+	if (last_token_ == kObjectEnd) {
+		StreamToken(output_file_);
 	} else {
-		RaiseError("Unexpected token");
+		RaiseError(kUnexpectedToken);
 	}
 }
 
@@ -79,11 +82,10 @@ void Parser::ParsePair() {
 	ParseString();
 	ParseSpace();
 
-	if (last_token_ == ':') {
-		output_file_ << last_token_;
-		++col_number_;
+	if (last_token_ == kPairDelim) {
+		StreamToken(output_file_);
 	} else {
-		RaiseError("Unexpected token");
+		RaiseError(kUnexpectedToken);
 	}
 
 	ParseSpace();
@@ -92,13 +94,12 @@ void Parser::ParsePair() {
 
 void Parser::ParseSpace() {
 	while (input_file_.get(last_token_)) {
-		if (last_token_ == '\n') {
+		if (last_token_ == kNewLine) {
+			output_file_ << last_token_;
 			++line_number_;
 			col_number_ = 1;
-			output_file_ << last_token_;
 		} else if (isspace(last_token_)) {
-			output_file_ << last_token_;
-			++col_number_;
+			StreamToken(output_file_);
 		} else {
 			break;
 		}
@@ -106,75 +107,67 @@ void Parser::ParseSpace() {
 }
 
 void Parser::ParseArray() {
-	if (last_token_ == '[') {
-		output_file_ << last_token_;
-		++col_number_;
+	if (last_token_ == kArrayStart) {
+		StreamToken(output_file_);
 	} else {
-		RaiseError("Unexpected token");
+		RaiseError(kUnexpectedToken);
 	}
 
 	ParseSpace();
 
-	if (last_token_ == ']') {
-		output_file_ << last_token_;
-		++col_number_;
+	if (last_token_ == kArrayEnd) {
+		StreamToken(output_file_);
 		return;
 	}
 
 	ParseValue();
 	ParseSpace();
 
-	while (last_token_ == ',') {
-		output_file_ << last_token_;
-		++col_number_;
-
+	while (last_token_ == kSeparator) {
+		StreamToken(output_file_);
 		ParseSpace();
 		ParseValue();
 		ParseSpace();
 	}
 
-	if (last_token_ == ']') {
-		output_file_ << last_token_;
-		++col_number_;
+	if (last_token_ == kArrayEnd) {
+		StreamToken(output_file_);
 	} else {
-		RaiseError("Unexpected token");
+		RaiseError(kUnexpectedToken);
 	}
 }
 
 void Parser::ParseConst() {
-
-	int next_chars;
+	StreamToken(output_file_);
 	std::string compare_string;
-	if (last_token_ == 't') {
-		next_chars = 3;
-		compare_string = "true";
-	} else if (last_token_ == 'f') {
-		next_chars = 4;
-		compare_string = "false";
-	} else if (last_token_ == 'n') {
-		next_chars = 3;
-		compare_string = "null";
+
+	if (last_token_ == kTrueConst[0]) {
+		compare_string = kTrueConst;
+	} else if (last_token_ == kFalseConst[0]) {
+		compare_string = kFalseConst;
+	} else if (last_token_ == kNullConst[0]) {
+		compare_string = kNullConst;
 	} else {
-		RaiseError("Unexpected token");
+		RaiseError(kUnexpectedToken);
 	}
 
-	std::stringstream identifier;
+	size_t next_chars{compare_string.length() - 1};
+	std::ostringstream identifier;
 	identifier << last_token_;
+
 	while (next_chars > 0 && input_file_.get(last_token_)) {
-		++col_number_;
+		StreamToken(output_file_);
 		identifier << last_token_;
 		--next_chars;
 	}
 
 	if (next_chars > 0 || identifier.str() != compare_string) {
-		RaiseError("Unexpected token");
+		RaiseError(kUnexpectedToken);
 	}
-
-	output_file_ << identifier.str();
 }
 
 void Parser::ParseNumber() {
-	if (isdigit(last_token_) || last_token_ == '-') {
+	if (isdigit(last_token_) || last_token_ == kMinusSign) {
 		input_file_.putback(last_token_);
 		auto stream_position_start = input_file_.tellg();
 
@@ -190,53 +183,48 @@ void Parser::ParseNumber() {
 		auto stream_position_end = input_file_.tellg();
 		input_file_.seekg(stream_position_start);
 		while (input_file_.tellg() != stream_position_end) {
-			++col_number_;
 			input_file_.get(last_token_);
-			output_file_ << last_token_;
+			StreamToken(output_file_);
 		}
-		--col_number_;
-
 	} else {
-		RaiseError("Unexpected token");
+		RaiseError(kUnexpectedToken);
 	}
 }
 
 void Parser::ParseValue() {
 	switch (last_token_) {
-	case '{': {
+	case kObjectStart: {
 		ParseObject();
 		break;
 	}
 
-	case '[': {
+	case kArrayStart: {
 		ParseArray();
 		break;
 	}
 
-	case '"': {
+	case kStringDelim: {
 		ParseString();
 		break;
 	}
 
-	case 't': // FALL-THROUGH
-	case 'f': // FALL-THROUGH
-	case 'n': {
-		ParseConst();
-		break;
-	}
-
 	default:
-		ParseNumber();
+		if (last_token_ == kTrueConst[0] ||
+			last_token_ == kFalseConst[0] ||
+			last_token_ == kNullConst[0]) {
+			ParseConst();
+		} else {
+			ParseNumber();
+		}
 		break;
 	}
 }
 
 void Parser::ParseString() {
-	if (last_token_ == '"') {
-		output_file_ << last_token_;
-		++col_number_;
+	if (last_token_ == kStringDelim) {
+		StreamToken(output_file_);
 	} else {
-		RaiseError("Unexpected token");
+		RaiseError(kUnexpectedToken);
 	}
 
 	bool escape_seq{false};
@@ -244,17 +232,14 @@ void Parser::ParseString() {
 
 	while (input_file_.get(last_token_)) {
 		if (escape_seq) {
-			identifier << last_token_;
-			++col_number_;
+			StreamToken(identifier);
 			escape_seq = false;
-		} else if (last_token_ == '\\') {
-			identifier << last_token_;
-			++col_number_;
+		} else if (last_token_ == kEscapeSeqStart) {
+			StreamToken(identifier);
 			escape_seq = true;
-		} else if (last_token_ == '\n') {
-			++line_number_;
+		} else if (last_token_ == kNewLine) {
 			RaiseError("Multi-line strings are not supported");
-		} else if (last_token_ == '"') {
+		} else if (last_token_ == kStringDelim) {
 			auto it = identifier_map_.find(identifier.str());
 			if (it != identifier_map_.end()) {
 				output_file_ << it->second;
@@ -264,12 +249,10 @@ void Parser::ParseString() {
 				output_file_ << hex_val;
 			}
 
-			output_file_ << last_token_;
-			++col_number_;
+			StreamToken(output_file_);
 			return;
 		} else {
-			identifier << last_token_;
-			++col_number_;
+			StreamToken(identifier);
 		}
 	}
 }
@@ -280,11 +263,11 @@ void Parser::Parse() {
 	ParseSpace();
 
 	if (!input_file_.eof() ) {
-		RaiseError("Unexpected token");
+		RaiseError(kUnexpectedToken);
 	}
 }
 
-std::string Parser::ParseEscapeSequence(std::stringstream& identifier_stream) {
+std::string Parser::ParseEscapeSequence(std::istringstream& identifier_stream) {
 	char character;
 	if (!identifier_stream.get(character)) {
 		RaiseError("Missing escape sequence");
@@ -319,20 +302,20 @@ std::string Parser::ParseEscapeSequence(std::stringstream& identifier_stream) {
 
 	// 4 character hex representation
 	case 'u':
-		int skip_chars{4};
-		std::string ret_val{"\\u"};
-		char unicode_character;
-		while (skip_chars > 0 && identifier_stream.get(unicode_character)) {
-			if (!isxdigit(unicode_character)) {
+		int next_chars{4};
+		std::string ret_val{kUnicodeStart};
+		while (next_chars > 0 && identifier_stream.get(character)) {
+			if (!isxdigit(character)) {
 				RaiseError("Invalid unicode character");
 			}
-			ret_val += unicode_character;
-			--skip_chars;
+			ret_val.push_back(character);
+			--next_chars;
 		}
 
-		if (skip_chars > 0) {
+		if (next_chars > 0) {
 			RaiseError("Unfinished unicode character");
 		}
+
 		return ret_val;
 	}
 
@@ -341,18 +324,18 @@ std::string Parser::ParseEscapeSequence(std::stringstream& identifier_stream) {
 }
 
 std::string Parser::ConvertToHexString(const std::string& identifier) {
-	std::stringstream ret_val;
-	std::stringstream identifier_stream{identifier};
+	std::ostringstream ret_val;
+	std::istringstream identifier_stream{identifier};
 	ret_val << std::hex;
 
 	char character;
 	while (identifier_stream.get(character)) {
 
-		if (character == '\\') {
+		if (character == kEscapeSeqStart) {
 			ret_val << ParseEscapeSequence(identifier_stream);
 
 		} else {
-			ret_val << "\\u";
+			ret_val << kUnicodeStart;
 			unsigned int converted_char = static_cast<unsigned char>(character);
 
 			// Unicode encoding
@@ -360,25 +343,25 @@ std::string Parser::ConvertToHexString(const std::string& identifier) {
 
 				// Decode code point from UTF-8
 				uint32_t code_point{0};
-				int read_next;
+				int next_chars;
 				if ((converted_char & 0b11110000) == 0b11110000) {
-					read_next = 3;
+					next_chars = 3;
 					code_point |= (converted_char & 0b00000111) << 18;
 				} else if ((converted_char & 0b11100000) == 0b11100000) {
-					read_next = 2;
+					next_chars = 2;
 					code_point |= (converted_char & 0b00001111) << 12;
 				} else if ((converted_char & 0b11000000) == 0b11000000) {
-					read_next = 1;
+					next_chars = 1;
 					code_point |= (converted_char & 0b00011111) << 6;
 				}
 
-				while (read_next > 0 && identifier_stream.get(character)) {
+				while (next_chars > 0 && identifier_stream.get(character)) {
 					converted_char = static_cast<unsigned char>(character);
-					code_point |= (converted_char & 0b00111111) << ((read_next - 1) * 6);
-					--read_next;
+					code_point |= (converted_char & 0b00111111) << ((next_chars - 1) * 6);
+					--next_chars;
 				}
 
-				if (read_next > 0) {
+				if (next_chars > 0) {
 					RaiseError("Invalid UTF-8 encoding");
 				}
 
@@ -397,7 +380,7 @@ std::string Parser::ConvertToHexString(const std::string& identifier) {
 				} else if (code_point > 0xdfff) {
 					uint32_t high_pair = (code_point - 0x10000) / 0x400 + 0xD800;
 					uint32_t low_pair = (code_point - 0x10000) % 0x400 + 0xDC00;
-					ret_val << high_pair << "\\u" << low_pair;
+					ret_val << high_pair << kUnicodeStart << low_pair;
 				} else {
 					RaiseError("Invalid code point");
 				}
@@ -419,14 +402,14 @@ std::string Parser::ConvertToHexString(const std::string& identifier) {
 void Parser::OutputMappings() {
 	bool first_entry{true};
 
-	mapping_file_ << "{" << std::endl;
+	mapping_file_ << kObjectStart << std::endl;
 	for (const auto& entry : identifier_map_ ) {
 		if (!first_entry) {
-			mapping_file_ << "," << std::endl;
+			mapping_file_ << kSeparator << std::endl;
 		} else {
 			first_entry = false;
 		}
-		mapping_file_ << "\t\"" << entry.first << "\": \"" << entry.second << '"';
+		mapping_file_ << "\t" << kStringDelim << entry.first << kStringDelim << kPairDelim << ' ' << kStringDelim << entry.second << kStringDelim;
 	}
-	mapping_file_ << std::endl << "}";
+	mapping_file_ << std::endl << kObjectEnd;
 }

@@ -55,7 +55,7 @@ private:
 	/**
 	 * Parses escape sequence in a string
 	 */
-	std::string ParseEscapeSequence(std::stringstream& identifier_stream);
+	std::string ParseEscapeSequence(std::istringstream& identifier_stream);
 
 	/**
 	 * Parse { } object block
@@ -103,6 +103,46 @@ private:
 	void RaiseError(const std::string& message) {
 		throw ParserError(message, line_number_, col_number_);
 	}
+
+	/**
+	 * Stream token helper
+	 */
+	template<typename T>
+	void StreamToken(std::basic_ostream<T>& token_stream) {
+		token_stream.put(last_token_);
+		++col_number_;
+	}
+
+	/**
+	 * Various tokens
+	 */
+	static constexpr char kObjectStart = '{';
+	static constexpr char kObjectEnd = '}';
+	static constexpr char kStringDelim = '"';
+	static constexpr char kSeparator = ',';
+	static constexpr char kPairDelim = ':';
+	static constexpr char kNewLine = '\n';
+	static constexpr char kArrayStart = '[';
+	static constexpr char kArrayEnd = ']';
+	static constexpr char kMinusSign = '-';
+	static constexpr char kEscapeSeqStart = '\\';
+
+	/**
+	 * Various supported constants
+	 */
+	static const std::string kTrueConst;
+	static const std::string kFalseConst;
+	static const std::string kNullConst;
+
+	/**
+	 * Unicode start
+	 */
+	static const std::string kUnicodeStart;
+
+	/**
+	 * Most used error message
+	 */
+	static const std::string kUnexpectedToken;
 
 	/**
 	 * Input stream
